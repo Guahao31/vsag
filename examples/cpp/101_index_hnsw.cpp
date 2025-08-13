@@ -16,24 +16,69 @@
 #include <vsag/vsag.h>
 
 #include <iostream>
+#include <fstream>
+
+
+void load_data(const std::string &filename, float *&data, int &num,
+               int &dim)
+{ // load data with sift10K/sift1M/gist1M pattern
+    std::ifstream in(filename, std::ios::binary);
+    if (!in.is_open())
+    {
+        std::cout << "Error: open file! " << filename << std::endl;
+        exit(-1);
+    }
+    else
+    {
+        std::cout << "Data loading from " << filename << std::endl;
+    }
+    in.read((char *)&dim, 4);
+    std::cout << "Data dimension: " << dim << std::endl;
+    in.seekg(0, std::ios::end);
+    std::ios::pos_type ss = in.tellg();
+    size_t fsize = (size_t)ss;
+    num = (unsigned)(fsize / (dim + 1) / 4);
+    std::cout << "Data quantity: " << num << std::endl;
+    
+    data = new float[dim * num];
+
+    in.seekg(0, std::ios::beg);
+    for (size_t i = 0; i < num; i++)
+    {
+        in.seekg(4, std::ios::cur);
+        in.read((char *)(data + i * dim), dim * 4);
+    }
+    in.close();
+    std::cout << "Data loading completed!" << std::endl;
+}
 
 int
 main(int argc, char** argv) {
     /******************* Prepare Base Dataset *****************/
+    // Parameters for building
+    int max_degree = 32;
+    int ef_construction = 256;
+
     int64_t num_vectors = 1000;
     int64_t dim = 128;
-    auto ids = new int64_t[num_vectors];
-    auto vectors = new float[dim * num_vectors];
+    // auto vectors = new float[dim * num_vectors];
+    float *vectors = NULL;
+    std::string filename = std::string("/data/gua/datafile/sift/sift_base.fvecs");
+    std::string save_file = std::string("/data/gua/newgraph/sift/sift_base_"
+        + std::to_string(max_degree) + "_"
+        + std::to_string(ef_construction)
+        + ".vsag");
 
-    std::mt19937 rng;
-    rng.seed(47);
-    std::uniform_real_distribution<> distrib_real;
-    for (int64_t i = 0; i < num_vectors; ++i) {
-        ids[i] = i;
-    }
-    for (int64_t i = 0; i < dim * num_vectors; ++i) {
-        vectors[i] = distrib_real(rng);
-    }
+    // Readin dataset
+    int t_num_vectors = 0;
+    int t_dim = 0;
+    load_data(filename, vectors, t_num_vectors, t_dim);
+    dim = static_cast<int64_t>(t_dim);
+    num_vectors = static_cast<int64_t>(t_num_vectors);
+    std::cout << "Data loaded: " << num_vectors << " vectors with dimension " << dim << std::endl;
+    auto ids = new int64_t[num_vectors];
+    for(int64_t i = 0; i < num_vectors; ++i) ids[i] = i;
+
     auto base = vsag::Dataset::Make();
     // Transfer the ownership of the data (ids, vectors) to the base.
     base->NumElements(num_vectors)->Dim(dim)->Ids(ids)->Float32Vectors(vectors);
@@ -46,18 +91,16 @@ main(int argc, char** argv) {
     // The "hnsw" section contains parameters specific to HNSW:
     // - "max_degree": The maximum number of connections for each node in the graph.
     // - "ef_construction": The size used for nearest neighbor search during graph construction, which affects both speed and the quality of the graph.
-    auto hnsw_build_paramesters = R"(
-    {
+    std::string hnsw_build_parameters = R"({
         "dtype": "float32",
         "metric_type": "l2",
-        "dim": 128,
+        "dim": )" + std::to_string(dim) + R"(,
         "hnsw": {
-            "max_degree": 16,
-            "ef_construction": 100
+            "max_degree": )" + std::to_string(max_degree) + R"(,
+            "ef_construction": )" + std::to_string(ef_construction) + R"(
         }
-    }
-    )";
-    auto index = vsag::Factory::CreateIndex("hnsw", hnsw_build_paramesters).value();
+    })";
+    auto index = vsag::Factory::CreateIndex("hnsw", hnsw_build_parameters).value();
 
     /******************* Build HNSW Index *****************/
     if (auto build_result = index->Build(base); build_result.has_value()) {
@@ -67,7 +110,20 @@ main(int argc, char** argv) {
         exit(-1);
     }
 
+    std::cout << "Saving graph into file: " << save_file << std::endl;
+    std::ofstream out_file_stream = std::ofstream(save_file);
+    if(auto save_result = index->Serialize(out_file_stream); save_result.has_value()) {
+        std::cout << "Saved graph successfully" << std::endl;
+    } else {
+        std::cerr << "Failed to save index: " << save_result.error().message << std::endl;
+        exit(-1);
+    }
+
+
     /******************* KnnSearch For HNSW Index *****************/
+    std::mt19937 rng;
+    rng.seed(47);
+    std::uniform_real_distribution<> distrib_real;
     auto query_vector = new float[dim];
     for (int64_t i = 0; i < dim; ++i) {
         query_vector[i] = distrib_real(rng);

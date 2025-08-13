@@ -144,6 +144,9 @@ HNSW::build(const DatasetPtr& base) {
                     logger::debug("duplicate point: {}", ids[i]);
                     failed_ids.emplace_back(ids[i]);
                 }
+                if(i % 100000 == 0) {
+                    logger::info("Already inserted {} points.", i);
+                }
             }
         }
 
