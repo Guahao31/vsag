@@ -1,6 +1,9 @@
 add_executable(101_index_hnsw 101_index_hnsw.cpp)
 target_link_libraries(101_index_hnsw vsag)
 
+add_executable(110_search_hnsw 110_search_hnsw.cpp)
+target_link_libraries(110_search_hnsw vsag)
+
 add_executable(102_index_diskann 102_index_diskann.cpp)
 target_link_libraries(102_index_diskann vsag_static)
 
