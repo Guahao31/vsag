@@ -14,94 +14,13 @@
 // limitations under the License.
 
 #include <vsag/vsag.h>
+#include "utils/util_functions.h"
+#include "logger.h"
 
 #include <iostream>
 #include <fstream>
 
 #include <fmt/format.h>
-
-
-void load_data(const std::string &filename, float *&data, int &num,
-               int &dim)
-{ // load data with sift10K/sift1M/gist1M pattern
-    std::ifstream in(filename, std::ios::binary);
-    if (!in.is_open())
-    {
-        std::cout << "Error: open file! " << filename << std::endl;
-        exit(-1);
-    }
-    else
-    {
-        std::cout << "Data loading from " << filename << std::endl;
-    }
-    in.read((char *)&dim, 4);
-    std::cout << "Data dimension: " << dim << std::endl;
-    in.seekg(0, std::ios::end);
-    std::ios::pos_type ss = in.tellg();
-    size_t fsize = (size_t)ss;
-    num = (unsigned)(fsize / (dim + 1) / 4);
-    std::cout << "Data quantity: " << num << std::endl;
-    
-    data = new float[dim * num];
-
-    in.seekg(0, std::ios::beg);
-    for (size_t i = 0; i < num; i++)
-    {
-        in.seekg(4, std::ios::cur);
-        in.read((char *)(data + i * dim), dim * 4);
-    }
-    in.close();
-    std::cout << "Data loading completed!" << std::endl;
-}
-
-void load_data_groundtruth(const std::string &filename, unsigned int *&data,
-                            int groundtruth_num, int query_num)
-{ // load data with sift10K/sift1M/gist1M pattern
-    std::ifstream in(filename, std::ios::binary);
-    if (!in.is_open())
-    {
-        std::cout << "Error: open file! " << filename << std::endl;
-        exit(-1);
-    }
-    else
-    {
-        std::cout << "Data loading from " << filename << std::endl;
-    }
-    in.seekg(0, std::ios::end);
-    std::ios::pos_type ss = in.tellg();
-    size_t fsize = (size_t)ss;
-
-    if ((unsigned)(fsize / (groundtruth_num + 1) / 4) != query_num)
-    {
-        std::cout << "fsize = " << (fsize / (groundtruth_num + 1) / 4) << " query_num = " << query_num << std::endl;
-        std::cout << "Error: file size!" << std::endl;
-        exit(-1);
-    }
-    else
-    {
-        std::cout << "Data quantity: " << query_num << std::endl;
-    };
-
-    data = (unsigned int *)new char[query_num * groundtruth_num * sizeof(unsigned int)];
-
-    in.seekg(0, std::ios::beg);
-    unsigned int temp;
-    for (size_t i = 0; i < query_num; i++)
-    {
-        in.read((char *)&temp, 4);
-        if (temp != groundtruth_num)
-        {
-            std::cout << "Error: temp value!" << std::endl;
-            exit(-1);
-        }
-        in.read((char *)(data + i * groundtruth_num), temp * 4);
-        // if (i == 0)
-        //     for (int j = 0; j < temp; j++)
-        //         std::cout << data + i * groundtruth_num << std::endl;
-    }
-    in.close();
-    std::cout << "Data loading completed!" << std::endl;
-}
 
 int
 main(int argc, char** argv) {
@@ -111,7 +30,8 @@ main(int argc, char** argv) {
     int ef_construction = 256;
 
     // Parameters for searching
-    int ef_search = 100;
+    int ef_search_list[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 700, 900};
+    int ef_search = 0;
     int64_t topk = 10;
     int groundtruth_num = 100;
 
@@ -146,13 +66,13 @@ main(int argc, char** argv) {
     // Deserialize hnsw
     std::ifstream in_file_stream = std::ifstream(save_file);
     if (!in_file_stream.is_open()) {
-        std::cerr << "Error: open file! " << save_file << std::endl;
+        vsag::logger::error("Error: open file! {}", save_file);
         exit(-1);
     } else {
-        std::cout << "Data loading from " << save_file << std::endl;
+        vsag::logger::info("Data loading from {}", save_file);
         index->Deserialize(in_file_stream);
-        std::cout << "Data loading completed! Current HNSW holds "
-            << index->GetNumElements() << " points" << std::endl;
+        vsag::logger::info("Data loading completed! Current HNSW holds {} points",
+                           index->GetNumElements());
     }
 
     /******************* Test HNSW Query *****************/
@@ -160,14 +80,14 @@ main(int argc, char** argv) {
     int query_num_vectors = 0;
     int query_dim = 0;
     float *query_vectors = NULL;
-    load_data(query_filename, query_vectors, query_num_vectors, query_dim);
+    vsag::load_data(query_filename, query_vectors, query_num_vectors, query_dim);
     assert(query_dim == dim);
-    std::cout << "Query data loaded: " << query_num_vectors
-              << " vectors with dimension " << query_dim << std::endl;
+    vsag::logger::info("Query data loaded: {} vectors with dimension {}",
+                       query_num_vectors, query_dim);
 
     // Read in groundtruth for query
     unsigned int *groundtruth;
-    load_data_groundtruth(groundtruth_filename, groundtruth,
+    vsag::load_data_groundtruth(groundtruth_filename, groundtruth,
                         groundtruth_num, query_num_vectors);
 
     // Perform query on the index
@@ -175,7 +95,7 @@ main(int argc, char** argv) {
     // The "hnsw" section contains parameters specific to the search operation:
     // - "ef_search": The size of the dynamic list used for nearest neighbor search,
     // which influences both recall and search speed.
-    auto hnsw_search_parameters = std::string(
+    auto hnsw_search_parameters_base = std::string(
         R"(
         {{
             "hnsw": {{
@@ -183,37 +103,40 @@ main(int argc, char** argv) {
             }}
         }}
         )");
-    hnsw_search_parameters = fmt::format(hnsw_search_parameters, ef_search);
 
-    uint64_t correct = 0;
-    float *query_single_vector = new float[query_dim];
-    auto query_base = vsag::Dataset::Make();
-    std::cout << "Test query with topK = " << topk << ", candidate_size = " << ef_search << std::endl;
-    for(int i_search = 0; i_search < query_num_vectors; ++i_search) {
-        memcpy(query_single_vector, query_vectors + i_search * query_dim, query_dim * sizeof(float));
-        // Get query vector
-        query_base->NumElements(1)->Dim(query_dim)->Float32Vectors(query_single_vector)->Owner(true);
+    for(size_t i_ef_search = 0; i_ef_search < sizeof(ef_search_list) / sizeof(int); ++i_ef_search) {
+        ef_search = ef_search_list[i_ef_search];
+        auto hnsw_search_parameters = fmt::format(hnsw_search_parameters_base, ef_search);
 
-        auto knn_result = index->KnnSearch(query_base, topk, hnsw_search_parameters);
-        if(knn_result.has_value()) {
-            auto result = knn_result.value();
-            auto res_ids = result->GetIds();
-            for(int i_topk = 0; i_topk < topk; ++i_topk) {
-                if(std::find(groundtruth + i_search * groundtruth_num,
-                            groundtruth + i_search * groundtruth_num + topk,
-                            res_ids[i_topk]) 
-                    != groundtruth + i_search * groundtruth_num + topk
-                ) {
-                    ++correct;
+        uint64_t correct = 0;
+        float *query_single_vector = new float[query_dim];
+        auto query_base = vsag::Dataset::Make();
+        vsag::logger::info("Start query test with topK = {}, ef_search = {}", topk, ef_search);
+        for(int i_search = 0; i_search < query_num_vectors; ++i_search) {
+            memcpy(query_single_vector, query_vectors + i_search * query_dim, query_dim * sizeof(float));
+            // Get query vector
+            query_base->NumElements(1)->Dim(query_dim)->Float32Vectors(query_single_vector)->Owner(true);
+
+            auto knn_result = index->KnnSearch(query_base, topk, hnsw_search_parameters);
+            if(knn_result.has_value()) {
+                auto result = knn_result.value();
+                auto res_ids = result->GetIds();
+                for(int i_topk = 0; i_topk < topk; ++i_topk) {
+                    if(std::find(groundtruth + i_search * groundtruth_num,
+                                groundtruth + i_search * groundtruth_num + topk,
+                                res_ids[i_topk]) 
+                        != groundtruth + i_search * groundtruth_num + topk
+                    ) {
+                        ++correct;
+                    }
                 }
+            } else {
+                vsag::logger::error("Search failed for query {}: {}", i_search, knn_result.error().message);
+                exit(1);
             }
-        } else {
-            std::cerr << "Search Error: " << knn_result.error().message << std::endl;
-            exit(1);
         }
+
+        vsag::logger::info("ef_search {} with recall: {}", ef_search, static_cast<float>(correct) / (query_num_vectors * topk));
     }
-
-    std::cout << "Query done. Recall = " << correct * 1.0 / topk / query_num_vectors << std::endl;
-
     return 0;
 }

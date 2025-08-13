@@ -210,4 +210,94 @@ base64_decode(const std::string& in) {
     return out;
 }
 
+
+/**
+ * @brief Loads data from a binary file into a float array.
+ */
+void
+load_data(
+    const std::string &filename, float *&data, int &num,int &dim)
+{
+    std::ifstream in(filename, std::ios::binary);
+    if (!in.is_open())
+    {
+        logger::error("Error: open file! {}", filename);
+        exit(-1);
+    }
+    else
+    {
+        logger::info("Data loading from {}", filename);
+    }
+    in.read((char *)&dim, 4);
+    logger::info("Data dimension: {}", dim);
+    in.seekg(0, std::ios::end);
+    std::ios::pos_type ss = in.tellg();
+    size_t fsize = (size_t)ss;
+    num = (unsigned)(fsize / (dim + 1) / 4);
+    logger::info("Data quantity: {}", num);
+    
+    data = new float[dim * num];
+
+    in.seekg(0, std::ios::beg);
+    for (size_t i = 0; i < num; i++)
+    {
+        in.seekg(4, std::ios::cur);
+        in.read((char *)(data + i * dim), dim * 4);
+    }
+    in.close();
+    logger::info("Data loading completed!");
+}
+
+/**
+ * @brief Loads ground truth data from a binary file into an unsigned int array.
+ */
+void load_data_groundtruth(
+    const std::string &filename, unsigned int *&data, int groundtruth_num, int query_num)
+{ // load data with sift10K/sift1M/gist1M pattern
+    std::ifstream in(filename, std::ios::binary);
+    if (!in.is_open())
+    {
+        logger::error("Error: open file! {}", filename);
+        exit(-1);
+    }
+    else
+    {
+        logger::info("Data loading from {}", filename);
+    }
+    in.seekg(0, std::ios::end);
+    std::ios::pos_type ss = in.tellg();
+    size_t fsize = (size_t)ss;
+
+    if ((unsigned)(fsize / (groundtruth_num + 1) / 4) != query_num)
+    {
+        logger::error("fsize = {} query_num = {}", (fsize / (groundtruth_num + 1) / 4), query_num);
+        logger::error("Error: file size!");
+        exit(-1);
+    }
+    else
+    {
+        logger::info("Data quantity: {}", query_num);
+    }
+
+    data = (unsigned int *)new char[query_num * groundtruth_num * sizeof(unsigned int)];
+
+    in.seekg(0, std::ios::beg);
+    unsigned int temp;
+    for (size_t i = 0; i < query_num; i++)
+    {
+        in.read((char *)&temp, 4);
+        if (temp != groundtruth_num)
+        {
+            logger::error("Error: wrong groundtruth_num!");
+            exit(-1);
+        }
+        in.read((char *)(data + i * groundtruth_num), temp * 4);
+        // if (i == 0)
+        //     for (int j = 0; j < temp; j++)
+        //         std::cout << data + i * groundtruth_num << std::endl;
+    }
+    in.close();
+    logger::info("Data loading completed!");
+}
+
 }  // namespace vsag
