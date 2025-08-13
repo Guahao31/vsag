@@ -18,11 +18,13 @@
 
 #include <cmath>
 #include <string>
+#include <fstream>
 
 #include "index/index_common_param.h"
 #include "vsag/dataset.h"
 #include "vsag/expected.hpp"
 #include "vsag_exception.h"
+#include "vsag/logger.h"
 
 namespace vsag {
 
@@ -115,5 +117,13 @@ base64_decode_obj(const std::string& in, T& obj) {
     std::string to_string = base64_decode(in);
     memcpy(&obj, to_string.c_str(), sizeof(obj));
 }
+
+void
+load_data(
+    const std::string &filename, float *&data, int &num,int &dim);
+
+void
+load_data_groundtruth(
+    const std::string &filename, unsigned int *&data, int groundtruth_num, int query_num);
 
 }  // namespace vsag
