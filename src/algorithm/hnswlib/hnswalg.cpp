@@ -544,6 +544,11 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
             }
             if (visited_array[candidate_id] != visited_array_tag) {
                 visited_array[candidate_id] = visited_array_tag;
+
+#ifdef CROUTING_COLLECT_INFO
+                vsag::counter_hops_search_2++;
+#endif
+
                 if (is_id_allowed && not candidate_set.empty() &&
                     generator.NextFloat() < skip_threshold &&
                     not is_id_allowed->CheckValid(getExternalLabel(candidate_id))) {
@@ -1620,6 +1625,8 @@ HierarchicalNSW::searchKnn(const void* query_data,
                     InnerIdType cand = datal[i];
                     if (cand > max_elements_)
                         throw std::runtime_error("cand error");
+                    
+                    vsag::counter_hops_search_1++;
                     float d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
 
                     if (d < curdist) {

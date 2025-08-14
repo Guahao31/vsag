@@ -56,6 +56,13 @@ enum class VSAGIndexStatus : int {
     ALIVE            // index is alive
 };
 
+#ifdef CROUTING_COLLECT_INFO
+    extern long long counter_hops_search_1;
+    extern long long counter_hops_search_2;
+    extern long long counter_pass_during_search_1;
+    extern long long counter_pass_during_search_2;
+#endif
+
 class HNSW : public Index {
 public:
     HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_param);
