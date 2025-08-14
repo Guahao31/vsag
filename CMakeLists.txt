@@ -29,6 +29,7 @@ macro (maybe_add_dependencies depender)
 endmacro ()
 
 # options
+option (ENABLE_TEST_INFO_COLLECT "Whether to enable test info collect" OFF)
 option (ENABLE_JEMALLOC "Whether to link jemalloc to all executables" OFF)
 option (ENABLE_ASAN "Whether to turn AddressSanitizer ON or OFF" OFF)
 option (ENABLE_COVERAGE "Whether to turn unit test coverage ON or OFF" OFF)
@@ -51,6 +52,10 @@ option (DISABLE_AVX512_FORCE "Force disable avx512 instructions" OFF)
 option (DISABLE_AVX512VPOPCNTDQ_FORCE "Force disable avx512vpopcntdq instructions" OFF)
 option (DISABLE_NEON_FORCE "Force disable neon instructions" OFF)
 
+if (ENABLE_TEST_INFO_COLLECT)
+    add_definitions (-DCROUTING_COLLECT_INFO)
+    message (STATUS "Will print information when testing for CRouting")
+endif()
 
 if (ENABLE_CXX11_ABI)
     add_definitions (-D_GLIBCXX_USE_CXX11_ABI=1)

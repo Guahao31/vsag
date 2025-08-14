@@ -57,6 +57,13 @@ const static uint32_t GENERATE_SEARCH_L = 400;
 const static uint32_t UPDATE_CHECK_SEARCH_L = 100;
 const static float GENERATE_OMEGA = 0.51;
 
+#ifdef CROUTING_COLLECT_INFO
+long long counter_hops_search_1 = 0;
+long long counter_hops_search_2 = 0;
+long long counter_pass_during_search_1 = 0;
+long long counter_pass_during_search_2 = 0;
+#endif
+
 HNSW::HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_param)
     : space_(std::move(hnsw_params.space)),
       use_static_(hnsw_params.use_static),

@@ -45,6 +45,15 @@
 #include "vsag/dataset.h"
 #include "vsag/iterator_context.h"
 
+#ifdef CROUTING_COLLECT_INFO
+namespace vsag {
+    extern long long counter_hops_search_1;
+    extern long long counter_hops_search_2;
+    extern long long counter_pass_during_search_1;
+    extern long long counter_pass_during_search_2;
+}
+#endif
+
 namespace hnswlib {
 using linklistsizeint = unsigned int;
 using reverselinklist = vsag::UnorderedSet<uint32_t>;

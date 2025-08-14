@@ -14,7 +14,9 @@
 // limitations under the License.
 
 #include <vsag/vsag.h>
+#include "index/hnsw.h"
 #include "utils/util_functions.h"
+#include "utils/crouting_timer.h"
 #include "logger.h"
 
 #include <iostream>
@@ -24,6 +26,9 @@
 
 int
 main(int argc, char** argv) {
+#ifdef CROUTING_COLLECT_INFO
+    vsag::logger::info("Open information collection");
+#endif
     /******************* Prepare Base Dataset *****************/
     // Parameters for building
     int max_degree = 32;
@@ -105,6 +110,15 @@ main(int argc, char** argv) {
         )");
 
     for(size_t i_ef_search = 0; i_ef_search < sizeof(ef_search_list) / sizeof(int); ++i_ef_search) {
+#ifdef CROUTING_COLLECT_INFO
+        // Reset counter and timer
+        vsag::counter_hops_search_1 = 0;
+        vsag::counter_hops_search_2 = 0;
+        vsag::counter_pass_during_search_1 = 0;
+        vsag::counter_pass_during_search_2 = 0;
+        double query_timer = 0;
+#endif
+
         ef_search = ef_search_list[i_ef_search];
         auto hnsw_search_parameters = fmt::format(hnsw_search_parameters_base, ef_search);
 
@@ -116,8 +130,13 @@ main(int argc, char** argv) {
             memcpy(query_single_vector, query_vectors + i_search * query_dim, query_dim * sizeof(float));
             // Get query vector
             query_base->NumElements(1)->Dim(query_dim)->Float32Vectors(query_single_vector)->Owner(true);
-
+#ifdef CROUTING_COLLECT_INFO
+            uint64_t timer = NowNanos();
+#endif
             auto knn_result = index->KnnSearch(query_base, topk, hnsw_search_parameters);
+#ifdef CROUTING_COLLECT_INFO
+            query_timer += static_cast<double>(ElapsedNanos(timer));
+#endif
             if(knn_result.has_value()) {
                 auto result = knn_result.value();
                 auto res_ids = result->GetIds();
@@ -135,6 +154,15 @@ main(int argc, char** argv) {
                 exit(1);
             }
         }
+
+#ifdef CROUTING_COLLECT_INFO
+        vsag::logger::info("counter_hops_search_1: {}", vsag::counter_hops_search_1);
+        vsag::logger::info("counter_hops_search_2: {}", vsag::counter_hops_search_2);
+        vsag::logger::info("counter_pass_during_search_1: {}", vsag::counter_pass_during_search_1);
+        vsag::logger::info("counter_pass_during_search_2: {}", vsag::counter_pass_during_search_2);
+        vsag::logger::info("total latency: {} ns", query_timer);
+        vsag::logger::info("average query latency: {} ns", query_timer / query_num_vectors);
+#endif
 
         vsag::logger::info("ef_search {} with recall: {}", ef_search, static_cast<float>(correct) / (query_num_vectors * topk));
     }
