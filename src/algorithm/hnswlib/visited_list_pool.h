@@ -46,7 +46,7 @@ public:
     uint64_t numelements{0};
 
     VisitedList(uint64_t numelements1, vsag::Allocator* allocator) : allocator_(allocator) {
-        curV = -1;
+        curV = -2;
         numelements = numelements1;
     }
 
@@ -55,7 +55,7 @@ public:
         if (not mass) {
             mass = (vl_type*)allocator_->Allocate(numelements * sizeof(vl_type));
         }
-        curV++;
+        curV += 2;
         if (curV == 0) {
             memset(mass, 0, sizeof(vl_type) * numelements);
             curV++;
