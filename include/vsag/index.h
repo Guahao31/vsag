@@ -543,6 +543,11 @@ public:
         throw std::runtime_error("Index doesn't support SetImmutable");
     }
 
+    virtual void
+    SetUseDoubleCheck(bool use_double_check) {
+        throw std::runtime_error("Index doesn't support SetUseDoubleCheck");
+    }
+
 public:
     // [serialize/deserialize with binaryset]
 

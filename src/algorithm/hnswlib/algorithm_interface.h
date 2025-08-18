@@ -124,6 +124,11 @@ public:
         throw std::runtime_error("Index doesn't support set immutable");
     }
 
+    virtual void
+    setUseDoubleCheck(bool use_double_check) {
+        throw std::runtime_error("Index doesn't support set use double check");
+    }
+
     virtual ~AlgorithmInterface() {
     }
 };

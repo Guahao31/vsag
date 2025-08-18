@@ -144,6 +144,27 @@ private:
 
     bool immutable_{false};
 
+    bool use_double_check_{false};
+    template <bool has_deletions, bool collect_metrics = false>
+    MaxHeap
+    searchBaseLayerST_base(InnerIdType ep_id,
+                      const void* data_point,
+                      size_t ef,
+                      const vsag::FilterPtr is_id_allowed = nullptr,
+                      const float skip_ratio = 0.9f,
+                      vsag::Allocator* allocator = nullptr,
+                      vsag::IteratorFilterContext* iter_ctx = nullptr) const;
+    
+    template <bool has_deletions, bool collect_metrics = false>
+    MaxHeap
+    searchBaseLayerST_doublecheck(InnerIdType ep_id,
+                      const void* data_point,
+                      size_t ef,
+                      const vsag::FilterPtr is_id_allowed = nullptr,
+                      const float skip_ratio = 0.9f,
+                      vsag::Allocator* allocator = nullptr,
+                      vsag::IteratorFilterContext* iter_ctx = nullptr) const;
+
 public:
     HierarchicalNSW(SpaceInterface* s,
                     size_t max_elements,
@@ -261,6 +282,11 @@ public:
     vsag::UnorderedMap<LabelType, InnerIdType>
     getDeletedElements() override {
         return deleted_elements_;
+    }
+
+    void
+    setUseDoubleCheck(bool use_double_check) override {
+        use_double_check_ = use_double_check;
     }
 
     MaxHeap

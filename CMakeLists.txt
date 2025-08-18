@@ -29,7 +29,7 @@ macro (maybe_add_dependencies depender)
 endmacro ()
 
 # options
-option (ENABLE_TEST_INFO_COLLECT "Whether to enable test info collect" OFF)
+option (ENABLE_TEST_INFO_COLLECT "Whether to enable test info collect" ON)
 option (ENABLE_JEMALLOC "Whether to link jemalloc to all executables" OFF)
 option (ENABLE_ASAN "Whether to turn AddressSanitizer ON or OFF" OFF)
 option (ENABLE_COVERAGE "Whether to turn unit test coverage ON or OFF" OFF)

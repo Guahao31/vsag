@@ -454,7 +454,7 @@ HierarchicalNSW::searchBaseLayer(InnerIdType ep_id, const void* data_point, int 
 
 template <bool has_deletions, bool collect_metrics>
 MaxHeap
-HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
+HierarchicalNSW::searchBaseLayerST_base(InnerIdType ep_id,
                                    const void* data_point,
                                    size_t ef,
                                    const vsag::FilterPtr is_id_allowed,
@@ -595,6 +595,175 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
 
 template <bool has_deletions, bool collect_metrics>
 MaxHeap
+HierarchicalNSW::searchBaseLayerST_doublecheck(InnerIdType ep_id,
+                                   const void* data_point,
+                                   size_t ef,
+                                   const vsag::FilterPtr is_id_allowed,
+                                   const float skip_ratio,
+                                   vsag::Allocator* allocator,
+                                   vsag::IteratorFilterContext* iter_ctx) const {
+    vsag::LinearCongruentialGenerator generator;
+    VisitedListPtr vl = visited_list_pool_->getFreeVisitedList();
+    vl_type* visited_array = vl->mass;
+    vl_type visited_array_tag = vl->curV;
+    vsag::Allocator* search_allocator = allocator == nullptr ? allocator_ : allocator;
+    vl_type pruned_array_tag = visited_array_tag - 1;
+
+    MaxHeap top_candidates(search_allocator);
+    MaxHeap candidate_set(search_allocator);
+
+    float valid_ratio = is_id_allowed ? is_id_allowed->ValidRatio() : 1.0F;
+    float skip_threshold = valid_ratio == 1.0F ? 0 : (1 - ((1 - valid_ratio) * skip_ratio));
+
+    float lower_bound;
+    if (iter_ctx != nullptr && !iter_ctx->IsFirstUsed()) {
+        lower_bound = 0.0;
+        while (!iter_ctx->Empty()) {
+            uint32_t cur_inner_id = iter_ctx->GetTopID();
+            float cur_dist = iter_ctx->GetTopDist();
+            if (visited_array[cur_inner_id] != visited_array_tag &&
+                iter_ctx->CheckPoint(cur_inner_id)) {
+                visited_array[cur_inner_id] = visited_array_tag;
+                top_candidates.emplace(cur_dist, cur_inner_id);
+                candidate_set.emplace(-cur_dist, cur_inner_id);
+                lower_bound = std::max(lower_bound, cur_dist);
+            }
+            iter_ctx->PopDiscard();
+        }
+    } else {
+        if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
+            ((!is_id_allowed) || is_id_allowed->CheckValid(getExternalLabel(ep_id)))) {
+            float dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+            lower_bound = dist;
+            top_candidates.emplace(dist, ep_id);
+            candidate_set.emplace(-dist, ep_id);
+        } else {
+            lower_bound = std::numeric_limits<float>::max();
+            candidate_set.emplace(-lower_bound, ep_id);
+        }
+        visited_array[ep_id] = visited_array_tag;
+    }
+
+    std::shared_ptr<char[]> link_data = std::shared_ptr<char[]>(new char[size_links_level0_]);
+    while (not candidate_set.empty()) {
+        std::pair<float, InnerIdType> current_node_pair = candidate_set.top();
+
+        if ((-current_node_pair.first) > lower_bound &&
+            (top_candidates.size() == ef || (!is_id_allowed && !has_deletions))) {
+            break;
+        }
+        candidate_set.pop();
+
+        InnerIdType current_node_id = current_node_pair.second;
+        getLinklistAtLevel(current_node_id, 0, link_data.get());
+        int* data = (int*)link_data.get();
+        size_t size = getListCount((linklistsizeint*)data);
+        //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
+        if (collect_metrics) {
+            metric_hops_++;
+            metric_distance_computations_ += size;
+        }
+
+        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offset_data_);
+#ifdef ENABLE_SSE
+        vsag::PrefetchLines((char*)(visited_array + *(data + 1)), 64);
+        vsag::PrefetchLines((char*)(visited_array + *(data + 1) + 64), 64);
+        vsag::PrefetchLines(vector_data_ptr, data_size_);
+        vsag::PrefetchLines((char*)(data + 2), 64);
+#endif
+
+        for (size_t j = 1; j <= size; j++) {
+            int candidate_id = *(data + j);
+            size_t pre_l = std::min(j, size - 2);
+            if (pre_l + prefetch_jump_code_size_ <= size) {
+                vector_data_ptr = data_level0_memory_->GetElementPtr(
+                    (*(data + pre_l + prefetch_jump_code_size_)), offset_data_);
+#ifdef ENABLE_SSE
+                vsag::PrefetchLines(
+                    (char*)(visited_array + *(data + pre_l + prefetch_jump_code_size_)), 64);
+                vsag::PrefetchLines(vector_data_ptr, data_size_);
+#endif
+            }
+            if (visited_array[candidate_id] != visited_array_tag) {
+                if (top_candidates.size() >= ef && visited_array[candidate_id] != pruned_array_tag) {
+                    visited_array[candidate_id] = pruned_array_tag;
+#ifdef CROUTING_COLLECT_INFO
+                    vsag::counter_pass_during_search_2++;
+#endif
+                    continue;
+                }
+                visited_array[candidate_id] = visited_array_tag;
+
+#ifdef CROUTING_COLLECT_INFO
+                vsag::counter_hops_search_2++;
+#endif
+
+                if (is_id_allowed && not candidate_set.empty() &&
+                    generator.NextFloat() < skip_threshold &&
+                    not is_id_allowed->CheckValid(getExternalLabel(candidate_id))) {
+                    continue;
+                }
+                float dist = 0;
+                char* currObj1 = getDataByInternalId(candidate_id);
+                dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                if (top_candidates.size() < ef || lower_bound > dist) {
+                    candidate_set.emplace(-dist, candidate_id);
+                    vector_data_ptr = data_level0_memory_->GetElementPtr(candidate_set.top().second,
+                                                                         offsetLevel0_);
+#ifdef ENABLE_SSE
+                    vsag::PrefetchLines(vector_data_ptr, 64);
+#endif
+
+                    if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
+                        ((!is_id_allowed) ||
+                         is_id_allowed->CheckValid(getExternalLabel(candidate_id)))) {
+                        if (iter_ctx != nullptr && !iter_ctx->CheckPoint(candidate_id)) {
+                            continue;
+                        }
+                        top_candidates.emplace(dist, candidate_id);
+                    }
+
+                    if (top_candidates.size() > ef) {
+                        auto cur_node_pair = top_candidates.top();
+                        if (iter_ctx != nullptr && iter_ctx->CheckPoint(cur_node_pair.second)) {
+                            iter_ctx->AddDiscardNode(cur_node_pair.first, cur_node_pair.second);
+                        }
+                        top_candidates.pop();
+                    }
+
+                    if (not top_candidates.empty())
+                        lower_bound = top_candidates.top().first;
+                }
+            }
+        }
+    }
+
+    visited_list_pool_->releaseVisitedList(vl);
+    return top_candidates;
+}
+
+template <bool has_deletions, bool collect_metrics>
+MaxHeap
+HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
+                                   const void* data_point,
+                                   size_t ef,
+                                   const vsag::FilterPtr is_id_allowed,
+                                   const float skip_ratio,
+                                   vsag::Allocator* allocator,
+                                   vsag::IteratorFilterContext* iter_ctx) const {
+    if (this->use_double_check_) {
+        // 对于有删除操作的场景，使用带双重检查的实现
+        return searchBaseLayerST_doublecheck<has_deletions, collect_metrics>(
+            ep_id, data_point, ef, is_id_allowed, skip_ratio, allocator, iter_ctx);
+    } else {
+        // 基础场景使用普通实现
+        return searchBaseLayerST_base<has_deletions, collect_metrics>(
+            ep_id, data_point, ef, is_id_allowed, skip_ratio, allocator, iter_ctx);
+    }
+}
+
+template <bool has_deletions, bool collect_metrics>
+MaxHeap
 HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
                                    const void* data_point,
                                    float radius,
@@ -603,6 +772,9 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
     VisitedListPtr vl = visited_list_pool_->getFreeVisitedList();
     vl_type* visited_array = vl->mass;
     vl_type visited_array_tag = vl->curV;
+#ifdef USE_DOUBLE_CHECK_HNSW
+    vl_type pruned_array_tag = visited_array_tag - 1;
+#endif
 
     MaxHeap top_candidates(allocator_);
     MaxHeap candidate_set(allocator_);
@@ -657,8 +829,20 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
             vsag::PrefetchLines(vector_data_ptr, 64);  ////////////
 #endif
             if (visited_array[candidate_id] != visited_array_tag) {
+#ifdef USE_DOUBLE_CHECK_HNSW
+                if (top_candidates.size() >= ef && visited_array[candidate_id] != pruned_array_tag) {
+                    visited_array[candidate_id] = pruned_array_tag;
+#ifdef CROUTING_COLLECT_INFO
+                    vsag::counter_pass_during_search_2++;
+#endif
+                    continue;
+                }
+#endif
                 visited_array[candidate_id] = visited_array_tag;
                 ++visited_count;
+#ifdef CROUTING_COLLECT_INFO
+                    vsag::counter_hops_search_2++;
+#endif
 
                 char* currObj1 = (getDataByInternalId(candidate_id));
                 float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);

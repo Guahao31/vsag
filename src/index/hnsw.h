@@ -330,6 +330,10 @@ public:
         SAFE_CALL(this->set_immutable());
     }
 
+    void SetUseDoubleCheck(bool use_double_check) override {
+        alg_hnsw_->setUseDoubleCheck(use_double_check);
+    }
+
 private:
     tl::expected<std::vector<int64_t>, Error>
     build(const DatasetPtr& base);
