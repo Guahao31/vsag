@@ -545,15 +545,14 @@ HierarchicalNSW::searchBaseLayerST_base(InnerIdType ep_id,
             if (visited_array[candidate_id] != visited_array_tag) {
                 visited_array[candidate_id] = visited_array_tag;
 
-#ifdef CROUTING_COLLECT_INFO
-                vsag::counter_hops_search_2++;
-#endif
-
                 if (is_id_allowed && not candidate_set.empty() &&
                     generator.NextFloat() < skip_threshold &&
                     not is_id_allowed->CheckValid(getExternalLabel(candidate_id))) {
                     continue;
                 }
+#ifdef CROUTING_COLLECT_INFO
+                vsag::counter_hops_search_2++;
+#endif
                 float dist = 0;
                 char* currObj1 = getDataByInternalId(candidate_id);
                 dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -694,15 +693,16 @@ HierarchicalNSW::searchBaseLayerST_doublecheck(InnerIdType ep_id,
                 }
                 visited_array[candidate_id] = visited_array_tag;
 
-#ifdef CROUTING_COLLECT_INFO
-                vsag::counter_hops_search_2++;
-#endif
-
                 if (is_id_allowed && not candidate_set.empty() &&
                     generator.NextFloat() < skip_threshold &&
                     not is_id_allowed->CheckValid(getExternalLabel(candidate_id))) {
                     continue;
                 }
+
+#ifdef CROUTING_COLLECT_INFO
+                vsag::counter_hops_search_2++;
+#endif
+
                 float dist = 0;
                 char* currObj1 = getDataByInternalId(candidate_id);
                 dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
