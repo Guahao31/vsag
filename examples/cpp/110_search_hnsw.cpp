@@ -31,8 +31,8 @@ main(int argc, char** argv) {
 #endif
     /******************* Prepare Base Dataset *****************/
     // Parameters for building
-    int max_degree = 32;
-    int ef_construction = 256;
+    int max_degree = 64;
+    int ef_construction = 300;
 
     // Parameters for searching
     int ef_search_list[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 700, 900};
@@ -108,6 +108,9 @@ main(int argc, char** argv) {
             }}
         }}
         )");
+#ifdef USE_DOUBLE_CHECK_HNSW
+        index->SetUseDoubleCheck(true);
+#endif
 
     for(size_t i_ef_search = 0; i_ef_search < sizeof(ef_search_list) / sizeof(int); ++i_ef_search) {
 #ifdef CROUTING_COLLECT_INFO
@@ -164,7 +167,7 @@ main(int argc, char** argv) {
         vsag::logger::info("average query latency: {} ns", query_timer / query_num_vectors);
 #endif
 
-        vsag::logger::info("ef_search {} with recall: {}", ef_search, static_cast<float>(correct) / (query_num_vectors * topk));
+        vsag::logger::info("ef_search {} with recall: {} (#correct = {})", ef_search, static_cast<float>(correct) / (query_num_vectors * topk), correct);
     }
     return 0;
 }
