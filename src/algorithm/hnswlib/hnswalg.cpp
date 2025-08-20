@@ -539,10 +539,16 @@ HierarchicalNSW::searchBaseLayerST_base(InnerIdType ep_id,
 #ifdef ENABLE_SSE
                 vsag::PrefetchLines(
                     (char*)(visited_array + *(data + pre_l + prefetch_jump_code_size_)), 64);
-                vsag::PrefetchLines(vector_data_ptr, data_size_);
+                // vsag::PrefetchLines(vector_data_ptr, data_size_);
 #endif
             }
             if (visited_array[candidate_id] != visited_array_tag) {
+#ifdef ENABLE_SSE
+                if (pre_l + prefetch_jump_code_size_ <= size) {
+                    vsag::PrefetchLines(vector_data_ptr, data_size_);
+                }
+#endif
+
                 visited_array[candidate_id] = visited_array_tag;
 
                 if (is_id_allowed && not candidate_set.empty() &&
@@ -674,15 +680,6 @@ HierarchicalNSW::searchBaseLayerST_doublecheck(InnerIdType ep_id,
         for (size_t j = 1; j <= size; j++) {
             int candidate_id = *(data + j);
             size_t pre_l = std::min(j, size - 2);
-            if (pre_l + prefetch_jump_code_size_ <= size) {
-                vector_data_ptr = data_level0_memory_->GetElementPtr(
-                    (*(data + pre_l + prefetch_jump_code_size_)), offset_data_);
-#ifdef ENABLE_SSE
-                vsag::PrefetchLines(
-                    (char*)(visited_array + *(data + pre_l + prefetch_jump_code_size_)), 64);
-                vsag::PrefetchLines(vector_data_ptr, data_size_);
-#endif
-            }
             if (visited_array[candidate_id] != visited_array_tag) {
                 if (top_candidates.size() >= ef && visited_array[candidate_id] != pruned_array_tag) {
                     visited_array[candidate_id] = pruned_array_tag;
@@ -691,6 +688,17 @@ HierarchicalNSW::searchBaseLayerST_doublecheck(InnerIdType ep_id,
 #endif
                     continue;
                 }
+
+                if (pre_l + prefetch_jump_code_size_ <= size) {
+                    vector_data_ptr = data_level0_memory_->GetElementPtr(
+                        (*(data + pre_l + prefetch_jump_code_size_)), offset_data_);
+#ifdef ENABLE_SSE
+                    vsag::PrefetchLines(
+                        (char*)(visited_array + *(data + pre_l + prefetch_jump_code_size_)), 64);
+                    vsag::PrefetchLines(vector_data_ptr, data_size_);
+#endif
+                }
+
                 visited_array[candidate_id] = visited_array_tag;
 
                 if (is_id_allowed && not candidate_set.empty() &&
@@ -752,11 +760,9 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
                                    vsag::Allocator* allocator,
                                    vsag::IteratorFilterContext* iter_ctx) const {
     if (this->use_double_check_) {
-        // 对于有删除操作的场景，使用带双重检查的实现
         return searchBaseLayerST_doublecheck<has_deletions, collect_metrics>(
             ep_id, data_point, ef, is_id_allowed, skip_ratio, allocator, iter_ctx);
     } else {
-        // 基础场景使用普通实现
         return searchBaseLayerST_base<has_deletions, collect_metrics>(
             ep_id, data_point, ef, is_id_allowed, skip_ratio, allocator, iter_ctx);
     }
