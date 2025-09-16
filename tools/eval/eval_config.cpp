@@ -65,6 +65,9 @@ EvalConfig::Load(argparse::ArgumentParser& parser) {
     if (parser.get<bool>("--disable_percent_latency")) {
         config.enable_percent_latency = false;
     }
+    if (parser.get<bool>("--enable_double_check")) {
+        config.enable_double_check = true;
+    }
 
     return config;
 }
@@ -140,6 +143,12 @@ EvalConfig::Load(YAML::Node& yaml_node, const eval_job& global_options) {
         config.enable_percent_latency = false;
         disable = false;
     }
+    bool enable = false;
+    check_and_get_value<bool>(yaml_node, "enable_double_check", enable);
+    if(enable == true) {
+        config.enable_double_check = true;
+        enable = false;
+    }
 
     return config;
 }
@@ -164,6 +173,7 @@ EvalConfig::CheckKeyAndType(YAML::Node& yaml_node) {
     check_and_get_value<bool>(yaml_node, "disable_memory");
     check_and_get_value<bool>(yaml_node, "disable_latency");
     check_and_get_value<bool>(yaml_node, "disable_percent_latency");
+    check_and_get_value<bool>(yaml_node, "enable_double_check");
 }
 
 }  // namespace vsag::eval

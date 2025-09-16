@@ -112,6 +112,18 @@ public:
     void
     SetMutexArray(MutexArrayPtr new_mutex_array);
 
+    using VisitFunc = uint32_t (BasicSearcher::*)(
+        const GraphInterfacePtr& graph,
+        const VisitedListPtr& vl,
+        const std::pair<float, uint64_t>& current_node_pair,
+        const FilterPtr& filter,
+        float skip_ratio,
+        Vector<InnerIdType>& to_be_visited_rid,
+        Vector<InnerIdType>& to_be_visited_id,
+        Vector<InnerIdType>& neighbors) const;
+    
+    static void SetVisitMode(bool using_double_check = false);
+
 private:
     // rid means the neighbor's rank (e.g., the first neighbor's rid == 0)
     //  id means the neighbor's  id  (e.g., the first neighbor's  id == 12345)
@@ -124,6 +136,16 @@ private:
           Vector<InnerIdType>& to_be_visited_rid,
           Vector<InnerIdType>& to_be_visited_id,
           Vector<InnerIdType>& neighbors) const;
+
+    uint32_t
+    visit_double_check(const GraphInterfacePtr& graph,
+                    const VisitedListPtr& vl,
+                    const std::pair<float, uint64_t>& current_node_pair,
+                    const FilterPtr& filter,
+                    float skip_ratio,
+                    Vector<InnerIdType>& to_be_visited_rid,
+                    Vector<InnerIdType>& to_be_visited_id,
+                    Vector<InnerIdType>& neighbors) const;
 
     template <InnerSearchMode mode = KNN_SEARCH>
     DistHeapPtr
@@ -147,6 +169,8 @@ private:
     Allocator* allocator_{nullptr};
 
     MutexArrayPtr mutex_array_{nullptr};
+
+    static VisitFunc visit_;
 
     // mock run parameters
     GraphInterfacePtr mock_graph_{nullptr};

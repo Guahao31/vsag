@@ -67,6 +67,60 @@ BasicSearcher::visit(const GraphInterfacePtr& graph,
     return count_no_visited;
 }
 
+uint32_t
+BasicSearcher::visit_double_check(const GraphInterfacePtr& graph,
+                                const VisitedListPtr& vl,
+                                const std::pair<float, uint64_t>& current_node_pair,
+                                const FilterPtr& filter,
+                                float skip_ratio,
+                                Vector<InnerIdType>& to_be_visited_rid,
+                                Vector<InnerIdType>& to_be_visited_id,
+                                Vector<InnerIdType>& neighbors) const {
+    LinearCongruentialGenerator generator;
+    uint32_t count_no_visited = 0;
+
+    if (this->mutex_array_ != nullptr) {
+        SharedLock lock(this->mutex_array_, current_node_pair.second);
+        graph->GetNeighbors(current_node_pair.second, neighbors);
+    } else {
+        graph->GetNeighbors(current_node_pair.second, neighbors);
+    }
+
+    float skip_threshold =
+        (filter != nullptr
+             ? (filter->ValidRatio() == 1.0F ? 0 : (1 - ((1 - filter->ValidRatio()) * skip_ratio)))
+             : 0.0F);
+
+    for (uint32_t i = 0; i < neighbors.size(); i++) {
+        if (i + prefetch_stride_visit_ < neighbors.size()) {
+            vl->Prefetch(neighbors[i + prefetch_stride_visit_]);
+        }
+        if (not vl->Get(neighbors[i])) {
+            if(not vl->GetPruned(neighbors[i])){
+                vl->SetPruned(neighbors[i]);
+                continue;
+            }
+            if (not filter || count_no_visited == 0 || generator.NextFloat() > skip_threshold ||
+                filter->CheckValid(neighbors[i])) {
+                to_be_visited_rid[count_no_visited] = i;
+                to_be_visited_id[count_no_visited] = neighbors[i];
+                count_no_visited++;
+            }
+            vl->Set(neighbors[i]);
+        }
+    }
+    return count_no_visited;
+}
+
+BasicSearcher::VisitFunc BasicSearcher::visit_ = &BasicSearcher::visit;
+
+void BasicSearcher::SetVisitMode(bool using_double_check) {
+    visit_ = using_double_check ? &BasicSearcher::visit_double_check : &BasicSearcher::visit;
+    if(using_double_check) {
+        logger::debug("Using double check.");
+    }
+}
+
 DistHeapPtr
 BasicSearcher::Search(const GraphInterfacePtr& graph,
                       const FlattenInterfacePtr& flatten,
@@ -104,6 +158,7 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
         inner_search_param.search_alloc == nullptr ? allocator_ : inner_search_param.search_alloc;
     auto top_candidates = std::make_shared<StandardHeap<true, false>>(alloc, -1);
     auto candidate_set = std::make_shared<StandardHeap<true, false>>(alloc, -1);
+    bool top_candidate_set_is_full = false;
 
     if (not graph or not flatten) {
         return top_candidates;
@@ -173,7 +228,17 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
             graph->Prefetch(candidate_set->Top().second, 0);
         }
 
-        count_no_visited = visit(graph,
+        if(not top_candidate_set_is_full) {
+            count_no_visited = visit(graph,
+                                    vl,
+                                    current_node_pair,
+                                    inner_search_param.is_inner_id_allowed,
+                                    inner_search_param.skip_ratio,
+                                    to_be_visited_rid,
+                                    to_be_visited_id,
+                                    neighbors);
+        } else {
+            count_no_visited = (this->*visit_)(graph,
                                  vl,
                                  current_node_pair,
                                  inner_search_param.is_inner_id_allowed,
@@ -181,6 +246,7 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
                                  to_be_visited_rid,
                                  to_be_visited_id,
                                  neighbors);
+        }
 
         dist_cmp += count_no_visited;
 
@@ -205,6 +271,7 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
 
                 if constexpr (mode == KNN_SEARCH) {
                     if (top_candidates->Size() > ef) {
+                        top_candidate_set_is_full = true;
                         if (iter_ctx->CheckPoint(top_candidates->Top().second)) {
                             auto cur_node_pair = top_candidates->Top();
                             iter_ctx->AddDiscardNode(cur_node_pair.first, cur_node_pair.second);
@@ -245,6 +312,7 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
         inner_search_param.search_alloc == nullptr ? allocator_ : inner_search_param.search_alloc;
     auto top_candidates = std::make_shared<StandardHeap<true, false>>(alloc, -1);
     auto candidate_set = std::make_shared<StandardHeap<true, false>>(alloc, -1);
+    bool top_candidate_set_is_full = false;
 
     if (not graph or not flatten) {
         return top_candidates;
@@ -309,7 +377,17 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
             graph->Prefetch(candidate_set->Top().second, 0);
         }
 
-        count_no_visited = visit(graph,
+        if(not top_candidate_set_is_full) {
+            count_no_visited = visit(graph,
+                                    vl,
+                                    current_node_pair,
+                                    inner_search_param.is_inner_id_allowed,
+                                    inner_search_param.skip_ratio,
+                                    to_be_visited_rid,
+                                    to_be_visited_id,
+                                    neighbors);
+        } else {
+            count_no_visited = (this->*visit_)(graph,
                                  vl,
                                  current_node_pair,
                                  inner_search_param.is_inner_id_allowed,
@@ -317,6 +395,7 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
                                  to_be_visited_rid,
                                  to_be_visited_id,
                                  neighbors);
+        }
 
         dist_cmp += count_no_visited;
 
@@ -347,6 +426,7 @@ BasicSearcher::search_impl(const GraphInterfacePtr& graph,
 
                 if constexpr (mode == KNN_SEARCH) {
                     if (top_candidates->Size() > ef) {
+                        top_candidate_set_is_full = true;
                         top_candidates->Pop();
                     }
                 }
