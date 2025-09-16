@@ -24,6 +24,7 @@
 #include "../monitor/latency_monitor.h"
 #include "../monitor/memory_peak_monitor.h"
 #include "../monitor/recall_monitor.h"
+#include "src/impl/basic_searcher.h"
 #include "typing.h"
 #include "vsag/filter.h"
 #include "vsag_exception.h"
@@ -58,6 +59,9 @@ SearchEvalCase::SearchEvalCase(const std::string& dataset_path,
                                EvalConfig config)
     : EvalCase(dataset_path, index_path, index), config_(std::move(config)) {
     auto search_mode = config_.search_mode;
+    if (config_.enable_double_check) {
+        BasicSearcher::SetVisitMode(true);
+    }
     if (search_mode == "knn") {
         this->search_type_ = SearchType::KNN;
     } else if (search_mode == "range") {

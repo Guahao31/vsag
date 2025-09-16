@@ -32,10 +32,10 @@ VisitedList::~VisitedList() {
 
 void
 VisitedList::Reset() {
-    if (tag_ == std::numeric_limits<VisitedListType>::max()) {
+    if (tag_ >= std::numeric_limits<VisitedListType>::max() - 2) {
         memset(list_, 0, max_size_ * sizeof(VisitedListType));
-        tag_ = 0;
+        tag_ = 1;
     }
-    ++tag_;
+    tag_ += 2;
 }
 }  // namespace vsag

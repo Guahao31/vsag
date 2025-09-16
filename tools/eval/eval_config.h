@@ -55,6 +55,7 @@ public:
     bool enable_memory{true};
     bool enable_latency{true};
     bool enable_percent_latency{true};
+    bool enable_double_check{false};
 
     EvalConfig() = default;
 };

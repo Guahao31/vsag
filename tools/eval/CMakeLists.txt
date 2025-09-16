@@ -21,6 +21,7 @@ add_library (eval_obj OBJECT ${eval_srcs})
 target_compile_options (eval_obj PRIVATE -fopenmp)
 target_link_libraries (eval_obj PRIVATE cpr)
 add_dependencies (eval_obj hdf5 spdlog yaml-cpp tabulate cpr)
+target_include_directories(eval_obj PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_executable (eval_performance main.cpp)
 target_compile_options (eval_performance PRIVATE -fopenmp)

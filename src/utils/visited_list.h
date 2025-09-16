@@ -43,6 +43,16 @@ public:
     }
 
     void
+    SetPruned(const InnerIdType& id) {
+        this->list_[id] = this->tag_ - 1;
+    }
+
+    [[nodiscard]] bool
+    GetPruned(const InnerIdType& id) {
+        return this->list_[id] == this->tag_ - 1;
+    }
+
+    void
     Prefetch(const InnerIdType& id) {
         PrefetchLines(this->list_ + id, 64);
     }

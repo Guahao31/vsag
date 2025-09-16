@@ -1,0 +1,35 @@
+global:
+    exporters:
+        e1: # give a name you like, will not be used
+            format: "text"
+            to: "stdout"
+        e2:
+            format: "json"
+            to: "file://tmp/perf-99.json"
+    num_threads_building: 16
+    num_threads_searching: 16
+
+SEARCH/SIFT:
+  datapath: "/data/gua/datafile/hdf5/sift-128-euclidean.hdf5"
+  type: "search"
+  index_name: "hgraph"
+  create_params: '{"dim":128,"dtype":"float32","metric_type":"l2","index_param":{"base_quantization_type":"sq8_uniform","max_degree":32,"ef_construction":400, "precise_quantization_type":"fp32", "use_reorder":true, "precise_io_type":"async_io"}}'
+  search_params: '{"hgraph":{"ef_search":99}}'
+  index_path: "/data/gua/newgraph/sift/hgraph_index"
+  topk: 10
+  search_mode: "knn" # ["knn", "range", "knn_filter", "range_filter"]
+  range: 0.5
+  delete_index_after_search: false
+#   enable_double_check: true
+
+# BUILD/SIFT:
+#   datapath: "/data/gua/datafile/hdf5/sift-128-euclidean.hdf5"
+#   type: "build"
+#   index_name: "hgraph"
+#   create_params: '{"dim":128,"dtype":"float32","metric_type":"l2","index_param":{"base_quantization_type":"sq8_uniform","max_degree":32,"ef_construction":400, "precise_quantization_type":"fp32", "use_reorder":true}}'
+#   search_params: '{"hgraph":{"ef_search":99}}'
+#   index_path: "/data/gua/newgraph/sift/hgraph_index"
+#   topk: 10
+#   search_mode: "knn" # ["knn", "range", "knn_filter", "range_filter"]
+#   range: 0.5
+#   delete_index_after_search: false
